@@ -3,17 +3,112 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Block Dodger</title>
+<title>Palmera Bay — open-world crime game</title>
 <style>
-  html, body { margin: 0; height: 100%; overflow: hidden; background: #11141b; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #0b0e13; font-family: Arial, Helvetica, sans-serif; color: #fff; }
   #game { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
-  /* Read aloud, never shown: the status line screen readers announce. */
   #status { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  #hud { display: none; position: fixed; inset: 0; pointer-events: none; z-index: 5; }
+  .panel { background: rgba(8, 12, 18, 0.55); border-radius: 8px; padding: 8px 12px; }
+  #top-right { position: absolute; top: 14px; right: 16px; text-align: right; }
+  #cash { font-size: 30px; font-weight: bold; color: #7ae08a; text-shadow: 0 2px 4px #000; }
+  #debt { font-size: 14px; color: #ff9a7a; }
+  #stars { font-size: 26px; letter-spacing: 4px; margin-top: 2px; text-shadow: 0 2px 4px #000; }
+  #objective { position: absolute; top: 14px; left: 16px; max-width: 460px; font-size: 16px; font-weight: bold; text-shadow: 0 2px 4px #000; }
+  #objective small { display: block; font-weight: normal; font-size: 12px; color: #cfe3ff; }
+  #minimap-wrap { position: absolute; left: 16px; bottom: 16px; }
+  #minimap { width: 190px; height: 190px; border: 2px solid rgba(255,255,255,0.35); border-radius: 50%; display: block; background: #10151c; }
+  #health { position: absolute; left: 16px; bottom: 216px; width: 190px; }
+  #health-bar { height: 10px; background: rgba(0,0,0,0.6); border-radius: 5px; overflow: hidden; }
+  #health-fill { height: 100%; width: 100%; background: #58c96b; }
+  #ammo { margin-top: 4px; font-size: 13px; text-shadow: 0 1px 3px #000; }
+  #speed { position: absolute; right: 18px; bottom: 20px; text-align: right; display: none; }
+  #speed-value { font-size: 44px; font-weight: bold; text-shadow: 0 2px 6px #000; }
+  #speed small { font-size: 13px; color: #cfe3ff; }
+  #car-health { margin-top: 6px; width: 150px; margin-left: auto; display: none; }
+  #car-health-bar { height: 8px; background: rgba(0,0,0,0.6); border-radius: 4px; overflow: hidden; }
+  #car-health-fill { height: 100%; width: 100%; background: #e8c832; }
+  #message { position: absolute; top: 22%; left: 50%; transform: translateX(-50%); text-align: center; opacity: 0; transition: opacity 0.4s; max-width: 560px; }
+  #msg-title { font-size: 30px; font-weight: bold; color: #ffd23e; text-shadow: 0 2px 6px #000; }
+  #msg-body { font-size: 15px; margin-top: 6px; text-shadow: 0 1px 4px #000; }
+  #hold { position: absolute; left: 50%; bottom: 120px; transform: translateX(-50%); width: 260px; display: none; text-align: center; font-size: 13px; }
+  #hold-bar { height: 10px; background: rgba(0,0,0,0.6); border-radius: 5px; overflow: hidden; margin-top: 4px; }
+  #hold-fill { height: 100%; width: 0%; background: #ffd23e; }
+  #hint { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); font-size: 12px; color: rgba(255,255,255,0.75); text-shadow: 0 1px 3px #000; white-space: nowrap; }
+  .screen { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; flex-direction: column; text-align: center; z-index: 10; background: linear-gradient(180deg, rgba(10,14,22,0.55), rgba(10,14,22,0.88)); }
+  .screen h1 { font-size: 64px; margin: 0; letter-spacing: 2px; color: #ffd23e; text-shadow: 0 4px 18px rgba(0,0,0,0.8); font-family: 'Arial Black', Arial, sans-serif; }
+  .screen h2 { font-size: 20px; margin: 6px 0 18px; color: #cfe3ff; font-weight: normal; }
+  .screen p { max-width: 620px; font-size: 15px; line-height: 1.55; color: #e8ecf2; }
+  .screen .controls { font-size: 13px; color: #9fb4cc; margin: 10px 0 22px; line-height: 1.7; }
+  .btn { pointer-events: auto; cursor: pointer; display: inline-block; margin: 6px; padding: 12px 28px; font-size: 17px; font-weight: bold; color: #10151c; background: #ffd23e; border: none; border-radius: 6px; }
+  .btn:hover { background: #ffe06a; }
+  .btn.ghost { background: transparent; color: #fff; border: 2px solid rgba(255,255,255,0.6); }
+  #end-title { font-size: 72px; color: #ff5a4d; }
 </style>
+<script type="importmap">
+{ "imports": { "three": "./vendor/three.module.min.js" } }
+</script>
 </head>
 <body>
-<canvas id="game" aria-label="Block Dodger: move the paddle left and right to dodge falling blocks and catch coins"></canvas>
+<canvas id="game" aria-label="Palmera Bay: an open-world crime game. Drive, steal cars, outrun the police and pay off a debt."></canvas>
 <p id="status" role="status" aria-live="polite"></p>
+
+<div id="hud">
+  <div id="objective" class="panel">Free roam — explore Palmera Bay<small>Rico Marín owes $50,000. Press N for the next job.</small></div>
+  <div id="top-right">
+    <div id="cash">$1,200</div>
+    <div id="debt">Debt $50,000</div>
+    <div id="stars">☆☆☆☆☆</div>
+  </div>
+  <div id="minimap-wrap"><canvas id="minimap" width="190" height="190"></canvas></div>
+  <div id="health">
+    <div id="health-bar"><div id="health-fill"></div></div>
+    <div id="ammo">Pistol 24 / 120</div>
+  </div>
+  <div id="speed"><span id="speed-value">0</span> <small>km/h</small>
+    <div id="car-health"><div id="car-health-bar"><div id="car-health-fill"></div></div></div>
+  </div>
+  <div id="message"><div id="msg-title"></div><div id="msg-body"></div></div>
+  <div id="hold">Hold position…<div id="hold-bar"><div id="hold-fill"></div></div></div>
+  <div id="hint"></div>
+</div>
+
+<div id="menu" class="screen">
+  <h1>PALMERA BAY</h1>
+  <h2>An open-world crime game</h2>
+  <p>Rico Marín came back to Palmera Bay with nothing but a debt: <b>$50,000</b> owed
+  to Vera Kross. Four jobs will clear it — if the Palmera Bay PD doesn't clear
+  Rico first. Steal cars, lose the heat, and take the bank.</p>
+  <div class="controls">
+    WASD move / drive &nbsp;·&nbsp; Shift sprint &nbsp;·&nbsp; E enter / exit car &nbsp;·&nbsp; F punch<br>
+    Mouse click shoot &nbsp;·&nbsp; R reload &nbsp;·&nbsp; Space handbrake / jump &nbsp;·&nbsp; N next job &nbsp;·&nbsp; P pause &nbsp;·&nbsp; M mute
+  </div>
+  <div>
+    <button id="btn-start" class="btn">START GAME</button>
+    <button id="btn-continue" class="btn ghost">CONTINUE</button>
+  </div>
+</div>
+
+<div id="pause" class="screen">
+  <h1>PAUSED</h1>
+  <h2>Palmera Bay waits for no one. Except now.</h2>
+  <div>
+    <button id="btn-resume" class="btn">RESUME</button>
+    <button id="btn-restart" class="btn ghost">RESTART</button>
+    <button id="btn-quit" class="btn ghost">MAIN MENU</button>
+  </div>
+</div>
+
+<div id="end" class="screen">
+  <h1 id="end-title">BUSTED</h1>
+  <h2 id="end-sub"></h2>
+  <p id="end-stats"></p>
+  <div>
+    <button id="btn-again" class="btn">PLAY AGAIN</button>
+    <button id="btn-menu2" class="btn ghost">MAIN MENU</button>
+  </div>
+</div>
+
 <script type="module" src="./src/main.js"></script>
 </body>
 </html>

@@ -1,79 +1,140 @@
-// The screenshot scenes behind ?shot=start|play|end. Each one plays the real rules forward from a
-// fresh world for a fixed number of steps, steered by a simple autopilot (look ahead each way the
-// paddle could move, keep clear of blocks, chase the lowest coin when that is safe), so the frame
-// is what a short game really looks like and the same seed always gives the same frame.
-import { FIELD, PLAYER, STEP } from './config.js';
-import { EVENT_OVER, KIND_BLOCK } from './world.js';
-import { SCREEN_OVER, SCREEN_PLAY, SCREEN_TITLE } from './render.js';
+// shots.js — the four staged scenes behind ?shot=cover|street|mission|coast.
+// Each one plays the real rules forward from a fresh world for a few seconds,
+// steered by a small autopilot, so the frame is what real play looks like and
+// the same seed always stages the same frame.
 
-const START_SECONDS = 5;
-const PLAY_SECONDS = 26;
-const END_LIMIT_SECONDS = 600;
-/**
- * How far ahead, in seconds, the autopilot checks each way it could move: the play scene's pilot
- * looks well ahead and keeps all its lives; the end scene's looks only a moment ahead, so it is
- * caught out once the blocks speed up, as a hurried player is.
- */
-const HORIZON_PLAY = 0.7;
-const HORIZON_END = 0.25;
-const SAMPLE = 1 / 30;
-const DIRECTIONS = [0, -1, 1];
-/** Extra room, each side, it keeps between the paddle and a block. */
-const MARGIN = 10;
+import { roadCenter } from './city.js';
 
-/** Seconds until moving in `direction` (-1, 0, 1) runs the paddle into a block; Infinity when it never does. */
-function timeToHit(state, direction, horizon) {
-  const player = state.player;
-  for (let t = SAMPLE; t <= horizon; t += SAMPLE) {
-    const x = Math.min(FIELD.width - player.width, Math.max(0, player.x + direction * PLAYER.speed * t));
-    for (let index = 0; index < state.items.length; index += 1) {
-      const item = state.items[index];
-      if (!item.active || item.kind !== KIND_BLOCK) continue;
-      const y = item.y + item.speed * t;
-      if (y + item.height > player.y && y < player.y + player.height && item.x < x + player.width + MARGIN && item.x + item.width > x - MARGIN) return t;
-    }
-  }
-  return Infinity;
+/** Drive the player's car toward a point: throttle and steer like a driver. */
+function driveInput(world, tx, tz) {
+  const car = world.player.inCar;
+  if (!car) return { fx: 0, fz: 0, run: false, jump: false, throttle: 0, steer: 0, brake: false };
+  const dx = tx - car.x;
+  const dz = tz - car.z;
+  const targetHeading = Math.atan2(dx, dz);
+  let turn = targetHeading - car.heading;
+  while (turn > Math.PI) turn -= Math.PI * 2;
+  while (turn < -Math.PI) turn += Math.PI * 2;
+  return {
+    fx: 0, fz: 0, run: false, jump: false,
+    throttle: 1, steer: Math.max(-1, Math.min(1, turn * 1.4)), brake: false,
+  };
 }
 
-/** Of the safe ways to move, the one toward the lowest coin (or the centre); else the one that is hit last. */
-function autopilot(state, horizon) {
-  const player = state.player;
-  let coin = null;
-  for (let index = 0; index < state.items.length; index += 1) {
-    const item = state.items[index];
-    if (item.active && item.kind !== KIND_BLOCK && (coin === null || item.y > coin.y)) coin = item;
+/** Run the world forward for `seconds` with the given input provider. */
+function playForward(world, seconds, inputFor) {
+  const steps = Math.round(seconds * 60);
+  for (let i = 0; i < steps; i += 1) {
+    world.step(1 / 60, inputFor(world));
   }
-  const target = coin === null ? FIELD.width / 2 : coin.x + coin.width / 2;
-  const centre = player.x + player.width / 2;
-  const wanted = target > centre + 8 ? 1 : target < centre - 8 ? -1 : 0;
-  let best = wanted;
-  let bestTime = timeToHit(state, wanted, horizon);
-  for (let index = 0; index < DIRECTIONS.length && bestTime !== Infinity; index += 1) {
-    const time = timeToHit(state, DIRECTIONS[index], horizon);
-    if (time > bestTime) {
-      bestTime = time;
-      best = DIRECTIONS[index];
-    }
-  }
-  return best;
 }
 
+/** Put the player in a car of the given kind at (x, z), facing heading. */
+function giveCar(world, kind, x, z, heading) {
+  const car = world.spawnPlayerCar(kind, x, z, heading);
+  world.player.enterCar(car);
+  return car;
+}
+
+function stageCover(world) {
+  // A chase downtown: Rico driving, three stars, two police cars on his tail,
+  // mid-delivery of the package. Afternoon sun.
+  world.city.setTimeOfDay(0.5);
+  const x = roadCenter(4);
+  const z = roadCenter(5) - 60;
+  giveCar(world, 'sport', x, z, 0);
+  // The hero car is always the same bright red, so it reads as Rico's car.
+  world.player.inCar.mesh.userData.body.material.color.setHex(0xc23b2e);
+  world.missions.startNext(); // First Wheels
+  world.missions.completeMission();
+  world.missions.startNext(); // The Pickup
+  world.missions.stepIndex = 2; // delivering to Club Neon
+  world.police.setHeat(3);
+  // Two cruisers right on his tail, on the same avenue, already rolling.
+  world.police.spawnCarAt(x - 1.5, z - 16, 0, 40);
+  world.police.spawnCarAt(x + 3, z - 30, 0, 42);
+  world.player.inCar.setSpeed(26);
+  playForward(world, 2.2, (w) => driveInput(w, roadCenter(4), roadCenter(5) + 120));
+  const car = world.player.inCar;
+  const fx = Math.sin(car.heading);
+  const fz = Math.cos(car.heading);
+  // Chase framing: the camera sits just ahead and to the side, looking back
+  // at Rico's car as it drives toward it — the cruisers on his tail fill
+  // the street behind him.
+  world.shotCamera = {
+    pos: [car.x + fx * 13 + 8, 4.5, car.z + fz * 13 + 5],
+    look: [car.x - fx * 8, 1.5, car.z - fz * 8],
+  };
+}
+
+function stageStreet(world) {
+  // On foot at a downtown crossing: traffic rolling past, pedestrians on the
+  // sidewalks, the towers behind. Morning light, no heat.
+  world.city.setTimeOfDay(0.32);
+  const x = roadCenter(4) + 4;
+  const z = roadCenter(4) + 4;
+  world.player.reset(x, z);
+  world.player.heading = Math.PI * 0.85;
+  playForward(world, 1.6, () => ({ fx: 0, fz: 0, run: false, jump: false, throttle: 0, steer: 0, brake: false }));
+  world.shotCamera = { pos: [world.player.x - 7, 4, world.player.z - 9], look: [world.player.x + 4, 1.5, world.player.z + 10] };
+}
+
+function stageMission(world) {
+  // The Palmera Job: Rico outside Bay Bank with the cash, four stars, police
+  // converging through the golden hour.
+  world.city.setTimeOfDay(0.8);
+  const bank = world.city.landmarks.bank;
+  world.player.reset(bank.x + 6, bank.z + 10);
+  world.player.heading = Math.PI;
+  world.missions.startNext();
+  world.missions.completeMission();
+  world.missions.startNext();
+  world.missions.completeMission();
+  world.missions.startNext();
+  world.missions.completeMission();
+  world.missions.startNext(); // The Palmera Job
+  world.missions.stepIndex = 2; // escape to the safehouse
+  world.police.setHeat(4);
+  world.police.spawnCar(bank.x - 20, bank.z - 40);
+  world.police.spawnCar(bank.x + 24, bank.z - 30);
+  world.police.spawnCar(bank.x, bank.z - 60);
+  playForward(world, 1.2, () => ({ fx: 0, fz: 0, run: false, jump: false, throttle: 0, steer: 0, brake: false }));
+  const p = world.player;
+  // Camera south of Rico, looking north: the cruisers converging from the
+  // bank fill the street behind him.
+  world.shotCamera = { pos: [p.x + 8, 5, p.z + 14], look: [p.x - 2, 1.5, p.z - 8] };
+}
+
+function stageCoast(world) {
+  // Sunset on the beach road: the sea on one side, palms on the other, Rico
+  // cruising with the top down and nowhere to be.
+  world.city.setTimeOfDay(0.92);
+  const x = roadCenter(5);
+  const z = world.city.landmarks.beach.z - 4;
+  giveCar(world, 'sport', x, z, Math.PI / 2);
+  world.player.inCar.mesh.userData.body.material.color.setHex(0xe07830); // sunset orange
+  world.player.inCar.setSpeed(30);
+  playForward(world, 2.5, (w) => driveInput(w, roadCenter(8), z));
+  const car = world.player.inCar;
+  const fx = Math.sin(car.heading);
+  const fz = Math.cos(car.heading);
+  // Low camera on the beach side, looking east down the beach road: the car
+  // in the middle, the towers on the left, the sea on the right.
+  world.shotCamera = {
+    pos: [car.x - fx * 12, 5, car.z + 9],
+    look: [car.x + fx * 12, 2, car.z],
+  };
+}
+
+const SCENES = { cover: stageCover, street: stageStreet, mission: stageMission, coast: stageCoast };
+
 /**
- * Set `world` to the named scene (start, play or end; any other name is start) and return the
- * screen to draw over it and the best score to show.
+ * Set `world` to the named scene and freeze it: main.js keeps rendering but
+ * stops the simulation, so the screenshot is stable.
  */
 export function stageShot(name, world) {
   world.reset();
-  if (name !== 'play' && name !== 'end') {
-    for (let index = 0; index < START_SECONDS / STEP; index += 1) world.step(STEP, 0, true);
-    return { screen: SCREEN_TITLE, best: 0 };
-  }
-  const limit = name === 'end' ? END_LIMIT_SECONDS : PLAY_SECONDS;
-  const horizon = name === 'end' ? HORIZON_END : HORIZON_PLAY;
-  for (let index = 0; index < limit / STEP; index += 1) {
-    if (world.step(STEP, autopilot(world.state, horizon), false) & EVENT_OVER) break;
-  }
-  const over = world.state.lives === 0;
-  return { screen: over ? SCREEN_OVER : SCREEN_PLAY, best: world.state.score };
+  const stage = SCENES[name] ?? SCENES.cover;
+  stage(world);
+  world.frozen = true;
 }

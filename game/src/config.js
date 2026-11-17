@@ -1,61 +1,99 @@
-// Every tuning number and colour in one place. The playfield is a fixed 1280x720 logical area;
-// the renderer scales it to the window, so no rule below depends on the screen size.
+// config.js — every tuning number for Palmera Bay in one place, so the feel of
+// the game can be adjusted without touching the systems that use the numbers.
 
-export const FIELD = { width: 1280, height: 720, groundY: 664 };
+// The city is a grid of blocks. Roads run between them; the beach is south (z+).
+export const CITY = {
+  blocks: 8, // blocks per side
+  blockSize: 44, // a block's side in world units
+  roadWidth: 14, // a road's width in world units
+  sidewalk: 3, // sidewalk strip inside each block edge
+};
 
-/** The simulation's fixed step, in seconds: 60 updates a second whatever the display's rate. */
-export const STEP = 1 / 60;
+// Derived: distance between neighbouring road centrelines, and the city half-size.
+export const PITCH = CITY.blockSize + CITY.roadWidth;
+export const CITY_HALF = (CITY.blocks * PITCH + CITY.roadWidth) / 2;
 
 export const PLAYER = {
-  width: 72,
-  height: 24,
-  speed: 560,
-  invulnerable: 1.5,
+  walkSpeed: 6,
+  runSpeed: 10,
+  accel: 40,
+  radius: 0.6,
+  height: 1.8,
+  health: 100,
+  punchDamage: 25,
+  punchRange: 1.6,
+  pistolDamage: 34,
+  pistolRange: 60,
+  pistolAmmo: 24,
+  pistolReserve: 120,
 };
 
-export const LIVES = 3;
-
-export const BLOCK = {
-  minWidth: 40,
-  maxWidth: 110,
-  height: 36,
-  speed: 240,
-  speedPerLevel: 30,
-  speedJitter: 90,
-  interval: 0.55,
-  intervalScale: 0.88,
-  minInterval: 0.14,
-  dodgePoints: 1,
+export const CAR = {
+  accel: 22, // units/s^2 at full throttle
+  brake: 34,
+  reverseAccel: 14,
+  maxSpeed: 38, // ~137 km/h
+  maxReverse: 12,
+  steer: 1.9, // rad/s at full lock, scaled down with speed
+  grip: 8, // how fast lateral velocity is killed (arcade grip)
+  handbrakeGrip: 1.2,
+  radius: 1.5,
+  health: 100,
 };
 
-export const COIN = {
-  size: 24,
-  speed: 190,
-  speedPerLevel: 14,
-  interval: 1.4,
-  intervalJitter: 0.8,
-  points: 10,
+export const TRAFFIC = {
+  count: 14,
+  speed: 11,
+  minGap: 7,
 };
 
-/** Seconds of play per level, and the last level: speeds and spawn rates stop growing there. */
-export const LEVEL = { seconds: 12, max: 12 };
+export const PEDS = {
+  count: 26,
+  walkSpeed: 2.2,
+  fleeSpeed: 5,
+};
 
-/** How many falling things can exist at once; the pool is allocated once, at boot. */
-export const POOL_SIZE = 64;
+export const POLICE = {
+  maxCars: 5,
+  chaseSpeed: 42,
+  ramDamage: 8,
+  bustRange: 3.2,
+  bustTime: 2.5, // seconds a cop must stay close to bust an on-foot player
+  loseDistance: 130, // beyond this the heat starts to cool
+  coolPerSecond: 0.12, // wanted heat lost per second while unseen
+};
 
+export const WANTED = {
+  maxStars: 5,
+  stealCar: 1, // stars added when a car is stolen in sight of the law
+  hitPed: 1,
+  shoot: 1,
+  killCop: 2,
+};
+
+export const WORLD = {
+  gravity: -22,
+  dayLengthSeconds: 600, // full sun cycle; screenshots pin the time instead
+  cashPickupRespawn: 45,
+};
+
+export const MISSIONS = {
+  debtStart: 50000,
+};
+
+// Colours of the city: warm sun, teal sea, pastel walls, dark asphalt.
 export const PALETTE = {
-  backdrop: '#11141b',
-  sky: '#1b1f2a',
-  ground: '#2a3040',
-  player: '#4fc3f7',
-  block: '#e5534b',
-  coin: '#f2c94c',
-  panel: '#252b38',
-  text: '#eef1f5',
-  muted: '#8b93a3',
+  sky: 0x87bfe8,
+  sunsetSky: 0xff9a5c,
+  sun: 0xffe3b3,
+  sea: 0x1f8fa8,
+  sand: 0xe8d3a1,
+  asphalt: 0x33363d,
+  sidewalk: 0x9a938a,
+  building: [0xe8b48c, 0xd99a7c, 0xc9d6dd, 0xf0d9a8, 0xb8c4c9, 0xe0a899, 0x9fc3c9],
+  glass: 0x2e4a5a,
+  palmTrunk: 0x7a5230,
+  palmLeaf: 0x3f9e4d,
+  police: 0x1c2733,
+  taxi: 0xf2c230,
 };
-
-export const FONT = 'system-ui, -apple-system, "Segoe UI", sans-serif';
-
-/** Where the best score is kept between visits (this browser only). */
-export const BEST_KEY = 'block-dodger.best';
